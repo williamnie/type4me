@@ -84,14 +84,6 @@ struct SettingsView: View {
             .padding(.horizontal, 10)
 
             Spacer()
-
-            // Footer hint
-            Text(L("左侧切换分类\n右侧编辑详情", "Navigate tabs on the left\nEdit details on the right"))
-                .font(.system(size: 10))
-                .foregroundStyle(TF.settingsTextTertiary)
-                .lineSpacing(2)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
         }
         .frame(width: 180)
         .background(TF.settingsBg)
