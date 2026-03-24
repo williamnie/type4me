@@ -28,6 +28,18 @@ final class DeepgramConnectionGateTests: XCTestCase {
         }
     }
 
+    func testMarkFailure_ignoredAfterMarkOpen() async throws {
+        let gate = DeepgramConnectionGate()
+
+        await gate.markOpen()
+        await gate.markFailure(URLError(.cancelled))
+
+        // Should still succeed since markOpen was called first
+        try await gate.waitUntilOpen(timeout: Duration.milliseconds(50))
+        let opened = await gate.hasOpened
+        XCTAssertTrue(opened)
+    }
+
     func testWaitUntilOpen_timesOutWhenNoHandshakeEventArrives() async {
         let gate = DeepgramConnectionGate()
 

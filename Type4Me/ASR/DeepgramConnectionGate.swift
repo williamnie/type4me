@@ -3,8 +3,10 @@ import Foundation
 actor DeepgramConnectionGate {
 
     private var continuation: CheckedContinuation<Void, Error>?
-    private var isOpen = false
+    private(set) var isOpen = false
     private var failure: Error?
+
+    var hasOpened: Bool { isOpen }
 
     func waitUntilOpen(timeout: Duration) async throws {
         let timeoutTask = Task {

@@ -118,7 +118,7 @@ enum DeepgramProtocol {
             return segment
         }
 
-        if first.isLikelyPrefixPunctuation || last.isLikelySuffixJoiner {
+        if first.isClosingPunctuation || last.isOpeningPunctuation {
             return segment
         }
 
@@ -168,11 +168,11 @@ enum DeepgramProtocol {
 }
 
 private extension Character {
-    var isLikelyPrefixPunctuation: Bool {
+    var isClosingPunctuation: Bool {
         ",.!?;:)]}\"'".contains(self)
     }
 
-    var isLikelySuffixJoiner: Bool {
+    var isOpeningPunctuation: Bool {
         "([{/\"'".contains(self)
     }
 

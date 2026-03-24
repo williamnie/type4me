@@ -40,7 +40,7 @@ actor DeepgramASRClient: SpeechRecognizer {
     private var lastTranscript: RecognitionTranscript = .empty
     private var audioPacketCount = 0
     private var didRequestClose = false
-    private var connectionGate = DeepgramConnectionGate()
+    private var connectionGate: DeepgramConnectionGate?
 
     var events: AsyncStream<RecognitionEvent> {
         if let existing = _events {
@@ -111,6 +111,7 @@ actor DeepgramASRClient: SpeechRecognizer {
         eventContinuation?.finish()
         eventContinuation = nil
         _events = nil
+        connectionGate = nil
         confirmedSegments = []
         lastTranscript = .empty
         audioPacketCount = 0
@@ -219,8 +220,11 @@ private final class DeepgramWebSocketDelegate: NSObject, URLSessionWebSocketDele
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
         reason: Data?
     ) {
+        // Only report failure if handshake hasn't completed yet.
+        // Post-handshake closes are normal session endings, not errors.
         let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) }
         Task {
+            guard await !connectionGate.hasOpened else { return }
             await connectionGate.markFailure(
                 DeepgramASRError.closedBeforeHandshake(
                     code: Int(closeCode.rawValue),
