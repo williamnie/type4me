@@ -273,6 +273,11 @@ actor RecognitionSession {
         state = .recording
         DebugFileLogger.log("session entered recording state, waiting for first audio chunk")
 
+        // Lower system volume during recording if enabled
+        if UserDefaults.standard.bool(forKey: "tf_lowerVolumeOnRecord") {
+            SystemVolumeManager.lower(to: 0.2)
+        }
+
         // Pre-warm LLM connection for modes with post-processing
         if !currentMode.prompt.isEmpty, let llmConfig = KeychainService.loadLLMConfig() {
             let client = currentLLMClient()
@@ -504,6 +509,7 @@ actor RecognitionSession {
             currentTranscript = .empty
         }
         resetSpeculativeLLM()
+        SystemVolumeManager.restore()
         logger.info("Session complete, injected \(effectiveText.count) chars")
     }
 
@@ -645,6 +651,7 @@ actor RecognitionSession {
         currentTranscript = .empty
         hasEmittedReadyForCurrentSession = false
         currentConfig = nil
+        SystemVolumeManager.restore()
     }
 
 }

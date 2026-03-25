@@ -882,6 +882,7 @@ struct GeneralSettingsTab: View, SettingsCardHelpers {
 
     @AppStorage("tf_startSound") private var startSound = StartSoundStyle.chime.rawValue
     @AppStorage("tf_launchAtLogin") private var launchAtLogin = true
+    @AppStorage("tf_lowerVolumeOnRecord") private var lowerVolumeOnRecord = false
     @AppStorage("tf_visualStyle") private var visualStyle = "timeline"
     @AppStorage("tf_language") private var language = AppLanguage.systemDefault
 
@@ -910,6 +911,8 @@ struct GeneralSettingsTab: View, SettingsCardHelpers {
                     startSoundRow
                     SettingsDivider()
                     settingsToggleRow(L("开机自动启动", "Launch at login"), isOn: $launchAtLogin)
+                    SettingsDivider()
+                    settingsToggleRow(L("录音时降低系统音量", "Lower volume while recording"), isOn: $lowerVolumeOnRecord)
                     SettingsDivider()
                     visualStyleRow
                     SettingsDivider()
