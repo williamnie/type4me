@@ -28,11 +28,17 @@ else
 fi
 
 echo "Building universal $BUILD_CONFIGURATION binary..."
-swift build \
+if ! xcrun swift build \
     -c "$BUILD_CONFIGURATION" \
     --package-path "$PROJECT_DIR" \
     --arch arm64 \
     --arch x86_64
+then
+    echo "Universal build unavailable on this runner, falling back to native architecture..."
+    xcrun swift build \
+        -c "$BUILD_CONFIGURATION" \
+        --package-path "$PROJECT_DIR"
+fi
 
 if [ -f "$PROJECT_DIR/.build/apple/Products/Release/Type4Me" ]; then
     BINARY="$PROJECT_DIR/.build/apple/Products/Release/Type4Me"
