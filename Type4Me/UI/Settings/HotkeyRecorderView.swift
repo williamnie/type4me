@@ -7,7 +7,7 @@ struct HotkeyRecorderView: View {
     @Binding var modifiers: UInt64?
 
     @State private var isRecording = false
-    @State private var eventMonitor: Any?
+    @State private var eventMonitor: HotkeyCaptureMonitor?
     @State private var pendingModifierCode: Int?
     @State private var pendingModifierModifiers: UInt64 = 0
     @State private var modifierCaptureTask: Task<Void, Never>?
@@ -74,63 +74,12 @@ struct HotkeyRecorderView: View {
         pendingModifierCode = nil
         modifierCaptureTask?.cancel()
         modifierCaptureTask = nil
-
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { event in
-            if event.type == .flagsChanged {
-                let kc = Int(event.keyCode)
-                guard Self.modifierKeyCodes.contains(kc) else { return event }
-                let pressed = isModifierPressed(keyCode: kc, flags: event.modifierFlags)
-
-                if pressed {
-                    // Modifier pressed: record co-modifiers, wait for possible combo key
-                    pendingModifierCode = kc
-                    pendingModifierModifiers = modifierComboModifiers(for: kc, flags: event.modifierFlags)
-                    modifierCaptureTask?.cancel()
-                    modifierCaptureTask = Task {
-                        try? await Task.sleep(for: .milliseconds(400))
-                        guard !Task.isCancelled else { return }
-                        await MainActor.run {
-                            guard let pending = pendingModifierCode else { return }
-                            captureModifierOnlyKey(pending, modifiers: pendingModifierModifiers)
-                        }
-                    }
-                } else {
-                    // Modifier released: capture with co-modifiers
-                    if let pending = pendingModifierCode {
-                        modifierCaptureTask?.cancel()
-                        modifierCaptureTask = nil
-                        keyCode = pending
-                        modifiers = pendingModifierModifiers
-                        pendingModifierCode = nil
-                        pendingModifierModifiers = 0
-                        stopRecording()
-                    }
-                }
-                return event
-            }
-
-            if event.type == .keyDown {
-                let kc = Int(event.keyCode)
-                // Cancel any pending modifier-only capture
-                modifierCaptureTask?.cancel()
-                modifierCaptureTask = nil
-                pendingModifierCode = nil
-
-                // Escape cancels
-                if kc == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad]).isEmpty {
-                    stopRecording()
-                    return nil
-                }
-                keyCode = kc
-                // Store modifier flags, stripping only non-bindable noise.
-                let clean = event.modifierFlags.intersection([.command, .shift, .option, .control, .function])
-                modifiers = clean.isEmpty ? 0 : UInt64(clean.rawValue)
-                stopRecording()
-                return nil
-            }
-
-            return event
+        let monitor = HotkeyCaptureMonitor()
+        guard monitor.start(handler: handleCaptureEvent) else {
+            isRecording = false
+            return
         }
+        eventMonitor = monitor
     }
 
     @MainActor
@@ -146,9 +95,58 @@ struct HotkeyRecorderView: View {
         modifierCaptureTask = nil
         pendingModifierCode = nil
         pendingModifierModifiers = 0
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
+        eventMonitor?.stop()
+        eventMonitor = nil
+    }
+
+    @MainActor
+    private func handleCaptureEvent(_ event: HotkeyCaptureEvent) {
+        let flags = NSEvent.ModifierFlags(rawValue: UInt(event.modifiers))
+
+        switch event.kind {
+        case .flagsChanged:
+            let kc = event.keyCode
+            guard Self.modifierKeyCodes.contains(kc) else { return }
+            let pressed = isModifierPressed(keyCode: kc, flags: flags)
+
+            if pressed {
+                pendingModifierCode = kc
+                pendingModifierModifiers = modifierComboModifiers(for: kc, flags: flags)
+                modifierCaptureTask?.cancel()
+                modifierCaptureTask = Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        guard let pending = pendingModifierCode else { return }
+                        captureModifierOnlyKey(pending, modifiers: pendingModifierModifiers)
+                    }
+                }
+            } else if let pending = pendingModifierCode {
+                modifierCaptureTask?.cancel()
+                modifierCaptureTask = nil
+                keyCode = pending
+                modifiers = pendingModifierModifiers
+                pendingModifierCode = nil
+                pendingModifierModifiers = 0
+                stopRecording()
+            }
+
+        case .keyDown:
+            let kc = event.keyCode
+            guard !event.isRepeat else { return }
+            modifierCaptureTask?.cancel()
+            modifierCaptureTask = nil
+            pendingModifierCode = nil
+
+            if kc == 53 && flags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad]).isEmpty {
+                stopRecording()
+                return
+            }
+
+            keyCode = kc
+            let clean = flags.intersection([.command, .shift, .option, .control, .function])
+            modifiers = clean.isEmpty ? 0 : UInt64(clean.rawValue)
+            stopRecording()
         }
     }
 

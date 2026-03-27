@@ -117,6 +117,7 @@ final class HotkeyManager: NSObject {
         }
 
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        let effectiveFlags = effectiveModifierFlags(for: event)
 
         for binding in bindings {
             guard binding.keyCode == keyCode else { continue }
@@ -125,11 +126,11 @@ final class HotkeyManager: NSObject {
                 // Modifier keys: handle via flagsChanged only, don't swallow.
                 // For combos like Ctrl+Shift, binding.modifiers stores "other modifiers".
                 guard type == .flagsChanged else { continue }
-                let pressed = isModifierPressed(keyCode: keyCode, flags: event.flags)
+                let pressed = isModifierPressed(keyCode: keyCode, flags: effectiveFlags)
 
                 if pressed {
                     let requiredMods = normalizedModifierFlags(binding.modifiers)
-                    let currentMods = otherModifierFlags(for: keyCode, flags: event.flags)
+                    let currentMods = otherModifierFlags(for: keyCode, flags: effectiveFlags)
                     guard currentMods == requiredMods else { continue }
                     handleBindingEvent(binding: binding, pressed: true)
                     return Unmanaged.passUnretained(event)
@@ -142,7 +143,7 @@ final class HotkeyManager: NSObject {
             } else {
                 // Regular keys: check modifier flags match
                 let requiredMods = normalizedModifierFlags(binding.modifiers)
-                let currentMods = normalizedModifierFlags(event.flags)
+                let currentMods = effectiveFlags
                 guard currentMods == requiredMods else { continue }
 
                 switch binding.style {
@@ -292,6 +293,14 @@ final class HotkeyManager: NSObject {
 
     private func normalizedModifierFlags(_ flags: CGEventFlags) -> CGEventFlags {
         flags.intersection([.maskCommand, .maskShift, .maskAlternate, .maskControl, .maskSecondaryFn])
+    }
+
+    /// macOS can report Globe/fn inconsistently between the event payload and the
+    /// current session state, so merge both views before matching bindings.
+    private func effectiveModifierFlags(for event: CGEvent) -> CGEventFlags {
+        let eventFlags = normalizedModifierFlags(event.flags)
+        let sourceFlags = normalizedModifierFlags(CGEventSource.flagsState(.combinedSessionState))
+        return eventFlags.union(sourceFlags)
     }
 
     private func modifierEventFlag(for keyCode: CGKeyCode) -> CGEventFlags? {

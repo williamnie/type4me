@@ -556,7 +556,7 @@ private struct HotkeyRecordingSheet: View {
     @State private var capturedModifiers: UInt64?
     @State private var hotkeyStyle: ProcessingMode.HotkeyStyle
     @State private var isListening = true
-    @State private var eventMonitor: Any?
+    @State private var eventMonitor: HotkeyCaptureMonitor?
     @State private var pendingModifierCode: Int?
     @State private var pendingModifierModifiers: UInt64 = 0
     @State private var modifierCaptureTask: Task<Void, Never>?
@@ -722,62 +722,12 @@ private struct HotkeyRecordingSheet: View {
     private func startListening() {
         cleanup()
         isListening = true
-
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { event in
-            if event.type == .flagsChanged {
-                let kc = Int(event.keyCode)
-                guard HotkeyRecorderView.modifierKeyCodes.contains(kc) else { return event }
-                let pressed = isModifierPressed(keyCode: kc, flags: event.modifierFlags)
-
-                if pressed {
-                    pendingModifierCode = kc
-                    pendingModifierModifiers = modifierComboModifiers(for: kc, flags: event.modifierFlags)
-                    modifierCaptureTask?.cancel()
-                    modifierCaptureTask = Task {
-                        try? await Task.sleep(for: .milliseconds(400))
-                        guard !Task.isCancelled else { return }
-                        await MainActor.run {
-                            guard let pending = pendingModifierCode else { return }
-                            captureModifierOnlyHotkey(pending, modifiers: pendingModifierModifiers)
-                        }
-                    }
-                } else {
-                    if let pending = pendingModifierCode {
-                        modifierCaptureTask?.cancel()
-                        modifierCaptureTask = nil
-                        capturedKeyCode = pending
-                        capturedModifiers = pendingModifierModifiers
-                        pendingModifierCode = nil
-                        pendingModifierModifiers = 0
-                        isListening = false
-                        removeMonitor()
-                    }
-                }
-                return event
-            }
-
-            if event.type == .keyDown {
-                let kc = Int(event.keyCode)
-                modifierCaptureTask?.cancel()
-                modifierCaptureTask = nil
-                pendingModifierCode = nil
-
-                if kc == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad]).isEmpty {
-                    cleanup()
-                    onCancel()
-                    return nil
-                }
-
-                capturedKeyCode = kc
-                let clean = sanitizedModifierFlags(event.modifierFlags)
-                capturedModifiers = clean.isEmpty ? 0 : UInt64(clean.rawValue)
-                isListening = false
-                removeMonitor()
-                return nil
-            }
-
-            return event
+        let monitor = HotkeyCaptureMonitor()
+        guard monitor.start(handler: handleCaptureEvent) else {
+            isListening = false
+            return
         }
+        eventMonitor = monitor
     }
 
     @MainActor
@@ -791,10 +741,8 @@ private struct HotkeyRecordingSheet: View {
     }
 
     private func removeMonitor() {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
-        }
+        eventMonitor?.stop()
+        eventMonitor = nil
     }
 
     private func cleanup() {
@@ -832,6 +780,60 @@ private struct HotkeyRecordingSheet: View {
         if keyCode == 63 { return flags.contains(.function) }
         guard let flag = modifierFlag(for: keyCode) else { return false }
         return flags.contains(flag)
+    }
+
+    @MainActor
+    private func handleCaptureEvent(_ event: HotkeyCaptureEvent) {
+        let flags = NSEvent.ModifierFlags(rawValue: UInt(event.modifiers))
+
+        switch event.kind {
+        case .flagsChanged:
+            let kc = event.keyCode
+            guard HotkeyRecorderView.modifierKeyCodes.contains(kc) else { return }
+            let pressed = isModifierPressed(keyCode: kc, flags: flags)
+
+            if pressed {
+                pendingModifierCode = kc
+                pendingModifierModifiers = modifierComboModifiers(for: kc, flags: flags)
+                modifierCaptureTask?.cancel()
+                modifierCaptureTask = Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        guard let pending = pendingModifierCode else { return }
+                        captureModifierOnlyHotkey(pending, modifiers: pendingModifierModifiers)
+                    }
+                }
+            } else if let pending = pendingModifierCode {
+                modifierCaptureTask?.cancel()
+                modifierCaptureTask = nil
+                capturedKeyCode = pending
+                capturedModifiers = pendingModifierModifiers
+                pendingModifierCode = nil
+                pendingModifierModifiers = 0
+                isListening = false
+                removeMonitor()
+            }
+
+        case .keyDown:
+            let kc = event.keyCode
+            guard !event.isRepeat else { return }
+            modifierCaptureTask?.cancel()
+            modifierCaptureTask = nil
+            pendingModifierCode = nil
+
+            if kc == 53 && flags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad]).isEmpty {
+                cleanup()
+                onCancel()
+                return
+            }
+
+            capturedKeyCode = kc
+            let clean = sanitizedModifierFlags(flags)
+            capturedModifiers = clean.isEmpty ? 0 : UInt64(clean.rawValue)
+            isListening = false
+            removeMonitor()
+        }
     }
 }
 
