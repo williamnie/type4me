@@ -278,6 +278,7 @@ struct ModesSettingsTab: View {
                     Text(HotkeyRecorderView.keyDisplayName(keyCode: kc, modifiers: mode.hotkeyModifiers))
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(TF.settingsTextSecondary)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(
@@ -369,6 +370,7 @@ struct ModesSettingsTab: View {
                         Text(HotkeyRecorderView.keyDisplayName(keyCode: kc, modifiers: mode.hotkeyModifiers))
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundStyle(isActive ? .white.opacity(0.6) : TF.settingsTextSecondary)
+                            .fixedSize(horizontal: true, vertical: false)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(

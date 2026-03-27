@@ -197,24 +197,23 @@ struct HotkeyRecorderView: View {
             if flags.contains(.option) { parts.append("⌥") }
             if flags.contains(.shift) { parts.append("⇧") }
             if flags.contains(.command) { parts.append("⌘") }
-            if flags.contains(.function) { parts.append("fn") }
+            if flags.contains(.function) { parts.append("Fn") }
         }
-        parts.append(singleKeyName(keyCode))
+        let keyName = singleKeyName(keyCode)
+        if parts.last != keyName {
+            parts.append(keyName)
+        }
         return parts.joined(separator: "+")
     }
 
     static func singleKeyName(_ keyCode: Int) -> String {
         switch keyCode {
         // Modifier keys
-        case 54: return "Right Command"
-        case 55: return "Left Command"
-        case 56: return "Left Shift"
-        case 58: return "Left Option"
-        case 59: return "Left Control"
-        case 60: return "Right Shift"
-        case 61: return "Right Option"
-        case 62: return "Right Control"
-        case 63: return "fn"
+        case 54, 55: return "⌘"
+        case 56, 60: return "⇧"
+        case 58, 61: return "⌥"
+        case 59, 62: return "⌃"
+        case 63: return "Fn"
 
         // Special keys
         case 36: return "Return"

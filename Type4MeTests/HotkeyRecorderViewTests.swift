@@ -9,7 +9,7 @@ final class HotkeyRecorderViewTests: XCTestCase {
 
         XCTAssertEqual(
             HotkeyRecorderView.keyDisplayName(keyCode: 49, modifiers: modifiers),
-            "fn+Space"
+            "Fn+Space"
         )
     }
 
@@ -18,7 +18,7 @@ final class HotkeyRecorderViewTests: XCTestCase {
 
         XCTAssertEqual(
             HotkeyRecorderView.keyDisplayName(keyCode: 49, modifiers: modifiers),
-            "⌃+fn+Space"
+            "⌃+Fn+Space"
         )
     }
 }
