@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import Type4Me
 
@@ -137,6 +138,24 @@ final class ModeStorageTests: XCTestCase {
         let loadedMode = loaded.first { $0.name == "Toggle Mode" }
 
         XCTAssertEqual(loadedMode?.hotkeyCode, 58)
+        XCTAssertEqual(loadedMode?.hotkeyStyle, .toggle)
+    }
+
+    func testFunctionModifierHotkeyIsPersisted() throws {
+        let storage = ModeStorage(fileURL: testURL)
+        var mode = ProcessingMode(
+            id: UUID(), name: "Fn Combo", prompt: "{text}", isBuiltin: false
+        )
+        mode.hotkeyCode = 49
+        mode.hotkeyModifiers = UInt64(NSEvent.ModifierFlags.function.rawValue)
+        mode.hotkeyStyle = .toggle
+
+        try storage.save([ProcessingMode.direct, mode])
+        let loaded = storage.load()
+        let loadedMode = loaded.first { $0.name == "Fn Combo" }
+
+        XCTAssertEqual(loadedMode?.hotkeyCode, 49)
+        XCTAssertEqual(loadedMode?.hotkeyModifiers, UInt64(NSEvent.ModifierFlags.function.rawValue))
         XCTAssertEqual(loadedMode?.hotkeyStyle, .toggle)
     }
 }

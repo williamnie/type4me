@@ -291,7 +291,7 @@ final class HotkeyManager: NSObject {
     }
 
     private func normalizedModifierFlags(_ flags: CGEventFlags) -> CGEventFlags {
-        flags.intersection([.maskCommand, .maskShift, .maskAlternate, .maskControl])
+        flags.intersection([.maskCommand, .maskShift, .maskAlternate, .maskControl, .maskSecondaryFn])
     }
 
     private func modifierEventFlag(for keyCode: CGKeyCode) -> CGEventFlags? {
@@ -300,6 +300,7 @@ final class HotkeyManager: NSObject {
         case 56, 60: return .maskShift
         case 58, 61: return .maskAlternate
         case 59, 62: return .maskControl
+        case 63: return .maskSecondaryFn
         default: return nil
         }
     }

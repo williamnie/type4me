@@ -1,0 +1,123 @@
+name: Package Type4Me
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional version for manual packaging, e.g. 1.2.4"
+        required: false
+        type: string
+      create_release:
+        description: "Create or update a GitHub Release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve package metadata
+        id: meta
+        env:
+          VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || '' }}
+          CREATE_RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.create_release || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version_input="${VERSION_INPUT}"
+          version_input="${version_input#v}"
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            release_tag="${GITHUB_REF_NAME}"
+            publish_release="true"
+          elif [[ -n "$version_input" ]]; then
+            version="$version_input"
+            release_tag="v$version"
+            publish_release="${CREATE_RELEASE_INPUT}"
+          else
+            version="0.0.0"
+            release_tag=""
+            publish_release="false"
+          fi
+
+          artifact_base="Type4Me-v${version}-macOS"
+
+          {
+            echo "version=$version"
+            echo "build=${GITHUB_RUN_NUMBER}"
+            echo "release_tag=$release_tag"
+            echo "artifact_base=$artifact_base"
+            echo "publish_release=$publish_release"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Show toolchain
+        shell: bash
+        run: |
+          xcodebuild -version
+          xcrun swift --version
+
+      - name: Build app bundle
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.meta.outputs.version }}
+          APP_BUILD: ${{ steps.meta.outputs.build }}
+          APP_PATH: ${{ runner.temp }}/dist/Type4Me.app
+        run: bash scripts/package_app.sh
+
+      - name: Validate app bundle
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.meta.outputs.version }}
+          EXPECTED_BUILD: ${{ steps.meta.outputs.build }}
+        run: bash scripts/test_app_bundle.sh "${{ runner.temp }}/dist/Type4Me.app"
+
+      - name: Create zip archive
+        shell: bash
+        run: |
+          mkdir -p "${{ runner.temp }}/artifacts"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ runner.temp }}/dist/Type4Me.app" \
+            "${{ runner.temp }}/artifacts/${{ steps.meta.outputs.artifact_base }}.zip"
+
+      - name: Create dmg archive
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.meta.outputs.version }}
+          APP_PATH: ${{ runner.temp }}/dist/Type4Me.app
+          DMG_PATH: ${{ runner.temp }}/artifacts/${{ steps.meta.outputs.artifact_base }}.dmg
+        run: bash scripts/package_dmg.sh
+
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_base }}
+          path: ${{ runner.temp }}/artifacts/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release assets
+        if: steps.meta.outputs.publish_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${{ runner.temp }}/artifacts/"* --clobber
+          else
+            gh release create "$RELEASE_TAG" "${{ runner.temp }}/artifacts/"* --generate-notes
+          fi

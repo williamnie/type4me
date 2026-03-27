@@ -762,7 +762,7 @@ private struct HotkeyRecordingSheet: View {
                 modifierCaptureTask = nil
                 pendingModifierCode = nil
 
-                if kc == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function]).isEmpty {
+                if kc == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad]).isEmpty {
                     cleanup()
                     onCancel()
                     return nil
@@ -806,7 +806,7 @@ private struct HotkeyRecordingSheet: View {
     }
 
     private func sanitizedModifierFlags(_ flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
-        flags.intersection([.command, .shift, .option, .control])
+        flags.intersection([.command, .shift, .option, .control, .function])
     }
 
     private func modifierFlag(for keyCode: Int) -> NSEvent.ModifierFlags? {
@@ -815,6 +815,7 @@ private struct HotkeyRecordingSheet: View {
         case 56, 60: return .shift
         case 58, 61: return .option
         case 59, 62: return .control
+        case 63: return .function
         default: return nil
         }
     }

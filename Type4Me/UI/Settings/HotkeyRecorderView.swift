@@ -117,13 +117,13 @@ struct HotkeyRecorderView: View {
                 pendingModifierCode = nil
 
                 // Escape cancels
-                if kc == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function]).isEmpty {
+                if kc == 53 && event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad]).isEmpty {
                     stopRecording()
                     return nil
                 }
                 keyCode = kc
-                // Store modifier flags, stripping noise (capsLock, numericPad, function)
-                let clean = event.modifierFlags.intersection([.command, .shift, .option, .control])
+                // Store modifier flags, stripping only non-bindable noise.
+                let clean = event.modifierFlags.intersection([.command, .shift, .option, .control, .function])
                 modifiers = clean.isEmpty ? 0 : UInt64(clean.rawValue)
                 stopRecording()
                 return nil
@@ -175,12 +175,13 @@ struct HotkeyRecorderView: View {
         case 56, 60: return .shift
         case 58, 61: return .option
         case 59, 62: return .control
+        case 63: return .function
         default: return nil
         }
     }
 
     private func modifierComboModifiers(for keyCode: Int, flags: NSEvent.ModifierFlags) -> UInt64 {
-        var clean = flags.intersection([.command, .shift, .option, .control])
+        var clean = flags.intersection([.command, .shift, .option, .control, .function])
         if let own = modifierFlag(for: keyCode) {
             clean.remove(own)
         }
@@ -198,6 +199,7 @@ struct HotkeyRecorderView: View {
             if flags.contains(.option) { parts.append("⌥") }
             if flags.contains(.shift) { parts.append("⇧") }
             if flags.contains(.command) { parts.append("⌘") }
+            if flags.contains(.function) { parts.append("fn") }
         }
         parts.append(singleKeyName(keyCode))
         return parts.joined(separator: "+")
