@@ -104,7 +104,7 @@ EOF
 
 if [ -n "$SIGNING_IDENTITY" ]; then
     echo "Signing app bundle with '$SIGNING_IDENTITY'..."
-    codesign -f -s "$SIGNING_IDENTITY" "$APP_PATH"
+    codesign -f -s "$SIGNING_IDENTITY" --identifier "$APP_BUNDLE_ID" "$APP_PATH"
 else
     echo "Skipping codesign because SIGN_APP=$SIGN_APP"
 fi

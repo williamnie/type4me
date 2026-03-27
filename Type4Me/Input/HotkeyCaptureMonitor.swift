@@ -16,6 +16,7 @@ final class HotkeyCaptureMonitor: NSObject {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var localMonitor: Any?
     private var handler: (@MainActor (HotkeyCaptureEvent) -> Void)?
 
     @discardableResult
@@ -37,8 +38,34 @@ final class HotkeyCaptureMonitor: NSObject {
             callback: hotkeyCaptureCallback,
             userInfo: userInfo
         ) else {
-            self.handler = nil
-            return false
+            // Fallback for hotkey recording inside our own settings window. This keeps
+            // normal keys bindable even when Accessibility/TCC is unavailable.
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+                guard let self else { return event }
+
+                let kind: HotkeyCaptureEvent.Kind
+                switch event.type {
+                case .flagsChanged:
+                    kind = .flagsChanged
+                case .keyDown:
+                    kind = .keyDown
+                default:
+                    return event
+                }
+
+                let captureEvent = HotkeyCaptureEvent(
+                    kind: kind,
+                    keyCode: Int(event.keyCode),
+                    modifiers: UInt64(event.modifierFlags.rawValue),
+                    isRepeat: event.isARepeat
+                )
+
+                Task { @MainActor in
+                    self.handler?(captureEvent)
+                }
+                return nil
+            }
+            return localMonitor != nil
         }
 
         eventTap = tap
@@ -58,6 +85,10 @@ final class HotkeyCaptureMonitor: NSObject {
         }
         eventTap = nil
         runLoopSource = nil
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+            self.localMonitor = nil
+        }
         handler = nil
     }
 
